@@ -17,6 +17,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Features
+- Add `open`, `defaultOpen` and `onOpenChange` props for `Dropdown` component (controlled mode) @Bugaa92 ([#900](https://github.com/stardust-ui/react/pull/900))
+
 <!--------------------------------[ v0.21.1 ]------------------------------- -->
 ## [v0.21.1](https://github.com/stardust-ui/react/tree/v0.21.1) (2019-02-14)
 [Compare changes](https://github.com/stardust-ui/react/compare/v0.21.0...v0.21.1)

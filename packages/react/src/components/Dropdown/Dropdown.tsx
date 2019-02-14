@@ -172,6 +172,7 @@ export interface DropdownState {
   activeSelectedIndex: number
   defaultHighlightedIndex: number
   focused: boolean
+  highlightedIndex: number
   isOpen?: boolean
   searchQuery?: string
   value: ShorthandValue | ShorthandCollection
@@ -188,6 +189,7 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
   private inputRef = React.createRef<HTMLInputElement>()
   private listRef = React.createRef<HTMLElement>()
   private selectedItemsRef = React.createRef<HTMLDivElement>()
+  private suggestedItemByLetterKeypress: { character?: string; index?: number } = {}
 
   static displayName = 'Dropdown'
 
@@ -262,8 +264,15 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
       // used on single selection to open the dropdown with the selected option as highlighted.
       defaultHighlightedIndex: this.props.multiple ? undefined : null,
       focused: false,
+      highlightedIndex: null,
       searchQuery: search ? '' : undefined,
       value: multiple ? [] : null,
+    }
+  }
+
+  componentWillReceiveProps(newProps: DropdownProps) {
+    if (newProps.items) {
+      this.suggestedItemByLetterKeypress = {}
     }
   }
 
@@ -284,7 +293,7 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
       itemToString,
       toggleIndicator,
     } = this.props
-    const { defaultHighlightedIndex, searchQuery, value } = this.state
+    const { defaultHighlightedIndex, highlightedIndex, searchQuery, value } = this.state
 
     return (
       <ElementType className={classes.root} {...unhandledProps}>
@@ -297,6 +306,7 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
           getA11yStatusMessage={getA11yStatusMessage}
           defaultHighlightedIndex={defaultHighlightedIndex}
           onStateChange={this.handleStateChange}
+          highlightedIndex={highlightedIndex}
         >
           {({
             getInputProps,
@@ -306,7 +316,6 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
             getToggleButtonProps,
             isOpen,
             toggleMenu,
-            highlightedIndex,
             selectItemAtIndex,
           }) => {
             const { innerRef, ...accessibilityRootPropsRest } = getRootProps(
@@ -486,6 +495,9 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
           selectItemAtIndex,
         )
       }
+      accessibilityMenuProps['onKeyPress'] = e => {
+        this.handleListKeyPress(e)
+      }
     }
 
     return (
@@ -579,6 +591,14 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
     changes: StateChangeOptions<ShorthandValue>,
   ) => {
     switch (changes.type) {
+      case Downshift.stateChangeTypes.keyDownArrowDown:
+      case Downshift.stateChangeTypes.keyDownArrowUp:
+      case Downshift.stateChangeTypes.itemMouseEnter:
+        if (!_.isNil(changes.highlightedIndex)) {
+          this.suggestedItemByLetterKeypress = {}
+          this.setState({ highlightedIndex: changes.highlightedIndex })
+        }
+        return changes
       case Downshift.stateChangeTypes.changeInput:
         this.trySetState({
           searchQuery: changes.inputValue,
@@ -963,6 +983,18 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
     _.invoke(this.props, 'onSelectedChange', {}, { ...this.props, value })
   }
 
+  private handleListKeyPress(e: React.SyntheticEvent) {
+    const keyPressed = String.fromCharCode(keyboardKey.getCode(e))
+    if (/[a-zA-Z]/.test(keyPressed)) {
+      const itemSuggestion = this.getItemSuggestionByCharacter(keyPressed)
+      if (itemSuggestion) {
+        this.setState({
+          highlightedIndex: this.props.items.indexOf(itemSuggestion),
+        })
+      }
+    }
+  }
+
   private tryFocusTriggerButton = () => {
     if (!this.props.search) {
       this.buttonRef.current.focus()
@@ -996,6 +1028,31 @@ class Dropdown extends AutoControlledComponent<Extendable<DropdownProps>, Dropdo
 
   private isValueEmpty = (value: ShorthandValue | ShorthandCollection) => {
     return _.isArray(value) ? value.length < 1 : !value
+  }
+
+  private getItemSuggestionByCharacter = (character: string): ShorthandValue => {
+    const { items, itemToString } = this.props
+    if (character !== this.suggestedItemByLetterKeypress.character) {
+      this.suggestedItemByLetterKeypress = { character, index: 0 }
+    }
+    const { index: lastIndex } = this.suggestedItemByLetterKeypress
+    for (let index = lastIndex; index < items.length; index++) {
+      if (
+        itemToString(items[index])
+          .charAt(0)
+          .toLowerCase() === character.toLowerCase()
+      ) {
+        this.suggestedItemByLetterKeypress.index = index + 1
+        return items[index]
+      }
+    }
+    // if there wasn't any in the first place, return nothing.
+    if (lastIndex === 0) {
+      return null
+    }
+    // if we had a suggestion before, will go through the items again.
+    this.suggestedItemByLetterKeypress.index = 0
+    return this.getItemSuggestionByCharacter(character)
   }
 }
 
